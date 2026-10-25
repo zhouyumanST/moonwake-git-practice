@@ -3,6 +3,80 @@
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
+#include <cmath>
+#include <optional>
+#include <cstdint>
+
+struct Detection{
+    int id;
+    int class_id;
+    double cx;
+    double cy;
+    double width;
+    double height;
+    double confidence;
+    std::optional<std::int64_t> stamp_ns;
+};
+Detection detection;
+
+enum class Side{
+    Right,
+    Left,
+    Center
+};
+
+
+struct BuoyOffset{
+    bool valid;
+    double dx_px;
+    double dx_norm;
+    Side side;
+    std::optional<std::int64_t> stamp_ns;
+    double confidence;
+};
+
+BuoyOffset compute_buoy_offset(
+    const Detection& detection,
+    int image_width,
+    double conf_threshold = 0.35,
+    double center_tolerance_norm = 0.08){
+
+    BuoyOffset result;
+    result.valid=false;
+
+    if(image_width<=0){
+        return result;
+}
+
+    if(conf_threshold>detection.confidence){
+        return result;
+}
+
+    const double dx_px = detection.cx - image_width / 2.0;
+    const double dx_norm = dx_px / (image_width / 2.0);
+
+    if (std::fabs(dx_norm) <= center_tolerance_norm) {
+        result.side=Side::Center;
+}
+    else if (dx_norm < 0) {
+        result.side=Side::Left;
+}
+    else {
+        result.side=Side::Right;
+}
+
+    result.dx_px=dx_px;
+    result.dx_norm=dx_norm;
+    result.confidence=detection.confidence;
+    result.stamp_ns=detection.stamp_ns;
+    result.valid=true;
+
+    return result;
+}
+
+
+
+
 
 // 最小检测流程：读取图像、提取红色区域并保留面积最大的目标。
 // 固定 HSV 阈值仅面向仓库样本，不适用于真实水面环境。
